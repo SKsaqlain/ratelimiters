@@ -1,6 +1,6 @@
 # Rate Limiters
 
-A FastAPI application demonstrating rate limiting algorithms: **Token Bucket**, **Leaky Bucket**, and **Fixed Window Counter**.
+A FastAPI application demonstrating rate limiting algorithms: **Token Bucket**, **Leaky Bucket**, **Fixed Window Counter**, and **Sliding Window Log**.
 
 ## Theory
 
@@ -95,15 +95,48 @@ The Fixed Window Counter algorithm divides time into fixed-duration windows and 
                     Counter resets to 3
 ```
 
+### Sliding Window Log Algorithm
+
+The Sliding Window Log algorithm tracks the exact timestamp of each request and uses a rolling time window to determine rate limits. It solves the boundary burst problem of fixed windows.
+
+**How it works:**
+1. Each request's timestamp is stored in a log
+2. When a new request arrives, expired timestamps (outside the window) are removed
+3. If the number of timestamps in the log is below the limit, the request is allowed
+4. The new request's timestamp is added to the log
+5. The window "slides" with time, providing smooth rate limiting
+
+**Characteristics:**
+- Very accurate rate limiting with no boundary issues
+- Higher memory usage (stores all timestamps in window)
+- Smooth sliding window eliminates burst problems
+- Good for strict, precise rate limiting requirements
+
+```
+[Sliding Window Log]
+    Window: 10 seconds (sliding)
+
+    Time: 0s    5s    10s   15s   20s
+          |-----|-----|-----|-----|
+
+    At t=12s, window covers t=2s to t=12s
+    ┌────────────────────────────┐
+    │ [t=3s] [t=7s] [t=11s]      │  ← Timestamps in window
+    └────────────────────────────┘
+
+    Expired timestamps (before t=2s) are removed
+    New request added if count < limit
+```
+
 ### Key Differences
 
-| Aspect | Token Bucket | Leaky Bucket | Fixed Window Counter |
-|--------|--------------|--------------|----------------------|
-| Burst handling | Allows bursts | Smooths bursts | Allows bursts (2x at boundary) |
-| Request processing | Immediate | Queued | Immediate |
-| Output rate | Variable (up to burst) | Constant | Variable within window |
-| Memory usage | Low | Higher (queue) | Very low |
-| Use case | APIs with occasional spikes | Strict rate enforcement | Simple rate limiting |
+| Aspect | Token Bucket | Leaky Bucket | Fixed Window Counter | Sliding Window Log |
+|--------|--------------|--------------|----------------------|--------------------|
+| Burst handling | Allows bursts | Smooths bursts | Allows bursts (2x at boundary) | No boundary bursts |
+| Request processing | Immediate | Queued | Immediate | Immediate |
+| Output rate | Variable (up to burst) | Constant | Variable within window | Smooth, consistent |
+| Memory usage | Low | Higher (queue) | Very low | Higher (stores timestamps) |
+| Use case | APIs with occasional spikes | Strict rate enforcement | Simple rate limiting | Precise rate limiting |
 
 ## Project Setup
 
@@ -226,6 +259,37 @@ After 3 requests, you'll see:
 ```
 
 The counter will reset after 60 seconds.
+
+### Sliding Window Log
+
+Start the Sliding Window Log server:
+```bash
+uvicorn app.main_sliding_window_log:app --reload
+```
+
+The Sliding Window Log is configured with a 10-second window and allows 3 requests per window.
+
+1. **Submit a request:**
+```bash
+curl http://localhost:8000/slidingWindowLog
+```
+
+Response:
+```json
+{"status": "request allowed"}
+```
+
+2. **Test rate limiting** by sending multiple rapid requests:
+```bash
+for i in {1..5}; do curl http://localhost:8000/slidingWindowLog; echo; done
+```
+
+After 3 requests, you'll see:
+```json
+{"status": "sliding window log rate limited, please try again later"}
+```
+
+Unlike fixed window, the sliding window continuously moves. After 10 seconds from your first request, older timestamps expire and new requests are allowed.
 
 ### API Documentation
 
