@@ -1,6 +1,6 @@
 # Rate Limiters
 
-A FastAPI application demonstrating rate limiting algorithms: **Token Bucket** , **Leaky Bucket**.
+A FastAPI application demonstrating rate limiting algorithms: **Token Bucket**, **Leaky Bucket**, and **Fixed Window Counter**.
 
 ## Theory
 
@@ -63,14 +63,47 @@ The Leaky Bucket algorithm shapes traffic by processing requests at a constant r
       [Processed] → One request per interval
 ```
 
+### Fixed Window Counter Algorithm
+
+The Fixed Window Counter algorithm divides time into fixed-duration windows and counts requests within each window. It's one of the simplest rate limiting approaches.
+
+**How it works:**
+1. Time is divided into fixed windows (e.g., 60-second intervals)
+2. Each window has a maximum request limit (counter)
+3. When a request arrives, the counter is decremented
+4. If the counter reaches zero, subsequent requests are rejected
+5. When the window expires, the counter resets to the maximum
+
+**Characteristics:**
+- Simple to implement and understand
+- Memory efficient (only stores a counter and timestamp)
+- Can have burst issues at window boundaries (2x burst possible)
+- Good for simple rate limiting needs
+
+```
+[Fixed Window Counter]
+    Window: 60 seconds
+    ┌─────────────────────────────────────┐
+    │  Window 1     │  Window 2     │ ... │
+    │  [3 requests] │  [3 requests] │     │
+    └─────────────────────────────────────┘
+           │
+           ▼
+    Counter: 3 → 2 → 1 → 0 (rate limited)
+                          │
+                          ▼ window expires
+                    Counter resets to 3
+```
+
 ### Key Differences
 
-| Aspect | Token Bucket | Leaky Bucket |
-|--------|--------------|--------------|
-| Burst handling | Allows bursts | Smooths bursts |
-| Request processing | Immediate | Queued |
-| Output rate | Variable (up to burst) | Constant |
-| Use case | APIs with occasional spikes | Strict rate enforcement |
+| Aspect | Token Bucket | Leaky Bucket | Fixed Window Counter |
+|--------|--------------|--------------|----------------------|
+| Burst handling | Allows bursts | Smooths bursts | Allows bursts (2x at boundary) |
+| Request processing | Immediate | Queued | Immediate |
+| Output rate | Variable (up to burst) | Constant | Variable within window |
+| Memory usage | Low | Higher (queue) | Very low |
+| Use case | APIs with occasional spikes | Strict rate enforcement | Simple rate limiting |
 
 ## Project Setup
 
@@ -162,6 +195,37 @@ After 5 requests, you'll see:
 ```json
 {"status": "token bucket rate limited, please try again later"}
 ```
+
+### Fixed Window Counter
+
+Start the Fixed Window Counter server:
+```bash
+uvicorn app.main_fixed_window_counter:app --reload
+```
+
+The Fixed Window Counter is configured with a 60-second window and allows 3 requests per window.
+
+1. **Submit a request:**
+```bash
+curl http://localhost:8000/fixedWindowCounter
+```
+
+Response:
+```json
+{"status": "request allowed"}
+```
+
+2. **Test rate limiting** by sending multiple rapid requests:
+```bash
+for i in {1..5}; do curl http://localhost:8000/fixedWindowCounter; echo; done
+```
+
+After 3 requests, you'll see:
+```json
+{"status": "fixed window counter rate limited, please try again later"}
+```
+
+The counter will reset after 60 seconds.
 
 ### API Documentation
 
