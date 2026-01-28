@@ -18,7 +18,6 @@ class SlidingWindowLog:
             current_time = time.time()
             window_start = current_time - self.window_size
 
-            # Remove timestamps outside the current window
             old_count = len(self.timestamps)
             self.timestamps = [ts for ts in self.timestamps if ts > window_start]
             removed = old_count - len(self.timestamps)
